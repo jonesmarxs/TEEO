@@ -28,13 +28,60 @@ function inicial(quantNos)
   return s;
 end
 
+function buscaLocal(s, Tabu)
+  sAtual = s[:]
+  minFO = Inf;
+  vizinhos = setdiff([1:quantNos], s);
+  mov = tuple();
+  melhorS = []
+
+  for i in 2:size(s)[1]
+    for v in vizinhos
+
+      if !(tuple(s[i-1], v) in Tabu)
+        s[i] = v;
+        prize, cost = FO(s);
+        if cost + max(0, limPrizes-prize) < minFO
+          mov = tuple(v, s[i-1]);
+          minFO = cost + max(0, limPrizes-prize)
+          melhorS = s[:];
+        end
+      end
+
+      s = sAtual[:];
+      if !(tuple(s[i], v) in Tabu)
+        insert!(s, i, v);
+        prize, cost = FO(s);
+        if cost + max(0, limPrizes-prize) < minFO
+          mov = tuple(v, s[i]);
+          minFO = cost + max(0, limPrizes-prize)
+          melhorS = s[:];
+        end
+      end
+
+      s = sAtual[:];
+
+    end
+
+    deleteat!(s, i);
+    prize, cost = FO(s);
+    if cost + max(0, limPrizes-prize) < minFO
+      minFO = cost + max(0, limPrizes-prize)
+      melhorS = s[:];
+    end
+    s = sAtual[:]
+
+  end
+
+  return melhorS, mov;
+end
+
 function FO(s)
   cost = 0.;
   prize = 0.;
   custos = Float32[];
   premios = Float32[];
   percents = Float32[];
-  global gMinCusto;
 
   prize = sum(prizes[s]);
 
@@ -46,73 +93,34 @@ function FO(s)
     cost += matrix[s[i], s[i+1]];
   end
 
-  if prize > limPrizes
-    if gMinCusto > cost
-      gMinCusto = cost;
-    end
-  end
-
   return prize, cost;
 end
 
 function BuscaTabu(BTmax, maxIter, s)
+  global gMinCusto
+
   sAtual = s[:];
   iter = 0;
   melhorIter = 0;
   Tabu = Array((Int, Int), 0);
-  melhorS =[];
+  melhorS = [];
   minFO = Inf;
-  mov = tuple();
 
-  while iter - melhorIter <= BTmax && iter < maxIter
+  while abs(iter - melhorIter) < BTmax && iter < maxIter
     s = sAtual[:];
-    vizinhos = setdiff([1:quantNos], s);
-    costAtual = FO(sAtual)[2];
 
-    for i in 2:size(s)[1]
+    melhorS, mov = buscaLocal(s, Tabu);
 
-      deleteat!(s, i);
-      prize, cost = FO(s);
-      if cost < minFO && prize > limPrizes
-        minFO = cost;
-        melhorS = s[:];
-      end
-
-      s = sAtual[:];
-      for v in vizinhos
-
-        if !(tuple(s[i-1], v) in Tabu)
-          s[i] = v;
-          prize, cost = FO(s);
-          if cost < minFO && prize > limPrizes
-            mov = tuple(v, s[i-1]);
-            minFO = cost;
-            melhorS = s[:];
-          end
-
-        end
-
-        s = sAtual[:];
-        if !(tuple(s[i], v) in Tabu)
-          insert!(s, i, v);
-          prize, cost = FO(s);
-          if cost < minFO && prize > limPrizes
-            mov = tuple(v, s[i]);
-            minFO = cost;
-            melhorS = s[:];
-          end
-
-        end
-        s = sAtual[:];
-      end
-
-    end
-
-    push!(Tabu, mov);
     prize, cost = FO(melhorS);
-    if prize > limPrizes && cost < costAtual
+    if cost < gMinCusto && limPrizes < prize
       sAtual = melhorS[:];
       melhorIter = iter;
+      gMinCusto = cost;
+    end
+
+    if abs(iter - melhorIter) > 0
+      push!(Tabu, mov);
+      sAtual = melhorS[:];
     end
 
     iter += 1;
@@ -128,10 +136,10 @@ quantNos = size(prizes)[1];
 limPrizes = 0.2 * sum(prizes);
 maxIter = 2000;
 gMinCusto = Inf;
-BTmax = 10;
+BTmax = 50;
 
 s = inicial(quantNos);
 
 solucao = BuscaTabu(BTmax, maxIter, s)
-
-println(s, " - ", gMinCusto);
+prize, cost = FO(solucao)
+println(gMinCusto, cost)
